@@ -3,6 +3,7 @@
 module Language.TECS.Deck.Parser.Lexer (lexer) where
 
 import Language.TECS.Deck.Parser.Tokens
+import Language.TECS.Located
 import Text.Parsec.Pos
 
 import qualified Data.ByteString.Lazy as BS

@@ -1,7 +1,8 @@
 module Language.TECS.Deck.Parser (deck, eof) where
 
 import Data.ByteString.Lazy (ByteString)
-import Language.TECS.Deck.Parser.Tokens (Token, L(..))
+import Language.TECS.Located
+import Language.TECS.Deck.Parser.Tokens (Token)
 import qualified Language.TECS.Deck.Parser.Tokens as T
 import Language.TECS.Deck.Syntax
 import Text.Parsec.Pos

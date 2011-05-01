@@ -1,15 +1,8 @@
-{-# LANGUAGE DeriveFunctor #-}
 module Language.TECS.Deck.Parser.Tokens where
 
 import Data.Word
 import Data.ByteString.Lazy (ByteString)
-import Text.Parsec.Pos
-       
-data L a = L { getLoc :: SourcePos, unLoc :: a }
-         deriving Functor
-
-instance Show a => Show (L a) where
-  show (L _ x) = unwords ["L", show x]
+import Language.TECS.Located
 
 data Token = CommentStart
            | Comment ByteString
