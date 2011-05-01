@@ -106,4 +106,4 @@ offset :: DeckParser Offset
 offset = value <?> "offset"
 
 deck :: DeckParser Deck
-deck = skipMany comment >> Deck <$> many functionDef
+deck = skipMany comment >> Deck <$> many directive <*> many functionDef

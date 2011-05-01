@@ -52,10 +52,10 @@ data FunctionDef = FunctionDef Function Arity [Directive]
 instance Pretty FunctionDef where
   pPrint (FunctionDef f arity ds) = text "function" <+> text f <+> text (show arity) $$ vcat (map pPrint ds)
   
-newtype Deck = Deck { getFunctions :: [FunctionDef] }
+data Deck = Deck [Directive] [FunctionDef]
 
 instance Pretty Deck where
-  pPrint (Deck funs) = vcat $ map pPrint funs
+  pPrint (Deck dirs funs) = (vcat $ map pPrint dirs) $$ (vcat $ map pPrint funs)
 
 type Value = Word16                   
 type Offset = Word16
