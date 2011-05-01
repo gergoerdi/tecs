@@ -2,7 +2,6 @@ module Language.TECS.Deck.Parser.Tokens where
 
 import Data.Word
 import Data.ByteString.Lazy (ByteString)
-import Language.TECS.Located
 
 data Token = CommentStart
            | Comment ByteString

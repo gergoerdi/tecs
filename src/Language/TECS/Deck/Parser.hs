@@ -13,31 +13,34 @@ import Control.Monad
 
 type DeckParser a = Parsec [L Token] () a
 
-tok :: (L Token -> Maybe a) -> DeckParser a
-tok f = token (show . unLoc) getLoc f
+tok :: Show t => (t -> Maybe a) -> Parsec [L t] () a
+tok f = token (show . unLoc) getLoc (f . unLoc)
 
-anyToken = tok (Just . unLoc)
+anyToken :: DeckParser Token
+anyToken = tok Just
+
+eof :: DeckParser ()
 eof = notFollowedBy anyToken <?> "end of input"
 
 identifier :: DeckParser String
-identifier = lexeme $ tok $ \ (L loc token) ->
+identifier = lexeme $ tok $ \ token ->
   case token of
     T.Identifier x -> Just x
     _ -> Nothing
     
 value :: DeckParser Value    
-value = lexeme $ tok $ \ (L loc token) ->
+value = lexeme $ tok $ \ token ->
   case token of
     T.Value n -> Just n
     _ -> Nothing
 
 keyword :: Token -> DeckParser ()
-keyword kw = lexeme $ tok $ \ (L loc token) -> do
+keyword kw = lexeme $ tok $ \ token -> do
   guard $ token == kw
   return ()
 
 commentContent :: DeckParser ByteString
-commentContent = tok $ \ (L loc token) -> do
+commentContent = tok $ \ token -> do
   case token of 
     T.Comment s -> Just s
     _ -> Nothing
