@@ -10,9 +10,6 @@ import Text.Parsec hiding (label, anyToken, eof)
 import Control.Applicative ((*>), (<*>), (<*), (<$>), (<$))
 import Control.Monad
 
-import Language.TECS.Deck.Parser.Lexer
-import Data.ByteString.Lazy.Char8 (pack)
-
 type DeckParser a = Parsec [L Token] () a
 
 tok :: (L Token -> Maybe a) -> DeckParser a
@@ -22,13 +19,13 @@ anyToken = tok (Just . unLoc)
 eof = notFollowedBy anyToken <?> "end of input"
 
 identifier :: DeckParser String
-identifier = tok $ \ (L loc token) ->
+identifier = lexeme $ tok $ \ (L loc token) ->
   case token of
     T.Identifier x -> Just x
     _ -> Nothing
     
 value :: DeckParser Value    
-value = tok $ \ (L loc token) ->
+value = lexeme $ tok $ \ (L loc token) ->
   case token of
     T.Value n -> Just n
     _ -> Nothing
@@ -104,5 +101,5 @@ addr =
 offset :: DeckParser Offset  
 offset = value <?> "offset"
 
-deck :: DeckParser [FunctionDef]
-deck = skipMany comment *> many functionDef
+deck :: DeckParser Deck
+deck = skipMany comment >> Deck <$> many functionDef

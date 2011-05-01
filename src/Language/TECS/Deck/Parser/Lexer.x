@@ -68,6 +68,7 @@ keywords :: Map (CI String) Token
 keywords = Map.fromList . map (first CI.mk) $
              [ ("function", Function)
              , ("label", Label)
+             , ("add", Add)
              , ("sub", Sub)
              , ("neg", Neg)
              , ("eq", Eq)
