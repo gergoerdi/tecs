@@ -1,4 +1,10 @@
-module Language.TECS.Jack.Syntax where
+{-# LANGUAGE DeriveFunctor, DeriveTraversable, DeriveFoldable #-}
+module Language.TECS.Jack.Syntax (
+  Name(..), 
+  Class(..), FieldDef(..), MethodDef(..), 
+  Body(..), VarDecl(..), VarDef(..), Stmt(..),
+  Expr(..), LValue(..), Type(..), Call(..)
+  ) where
 
 import Text.PrettyPrint.HughesPJClass
 import Text.PrettyPrint.HughesPJ
@@ -6,62 +12,64 @@ import Data.Word
 import Data.ByteString.Lazy (ByteString)
 import qualified Data.ByteString.Lazy as BS
 import qualified Data.ByteString.Lazy.Char8 as BSC
+import Data.Foldable
+import Data.Traversable
 
 newtype Name = MkName { getName :: String }
-             deriving Show
+             deriving (Eq, Ord, Show)
 
 instance Pretty Name where
   pPrint= text . getName
 
-test = Class (MkName "foo") 
-         [ Field TyBool [MkName "x1", MkName "x2"]
-         , Field TyBool [MkName "x1", MkName "x2"]
-         ]
-         []
-
 block header body = header $+$ lbrace $+$ nest 4 body $+$ rbrace
 
-data Class name = Class name [FieldDef name] [MethodDef name]
+data Class name = Class String [FieldDef name] [MethodDef name]
                 deriving Show
                          
 instance Pretty name => Pretty (Class name) where                         
-  pPrint (Class cls fields methods) = block (text "class" <+> pPrint cls) content
+  pPrint (Class cls fields methods) = block (text "class" <+> text cls) content
     where content = vcat (map pPrint fields) $$ vcat (map pPrint methods)
                          
-data FieldDef name = Field (Type name) [name]
-                   | Static (Type name) [name]
+data FieldDef name = Field Type [name]
+                   | Static Type [name]
                    deriving Show
                             
 instance Pretty name => Pretty (FieldDef name) where                            
   pPrint (Field ty vs) = text "field" <+> pPrint ty <+> cat (punctuate comma $ map pPrint vs) <> semi
   pPrint (Static ty vs) = text "static" <+> pPrint ty <+> cat (punctuate comma $ map pPrint vs) <> semi
 
-data MethodDef name = Constructor (Type name) name [VarDef name] (Body name)
-                    | Function (Maybe (Type name)) name [VarDef name] (Body name)
-                    | Method (Maybe (Type name)) name [VarDef name] (Body name)
+data MethodDef name = Constructor Type String [VarDef name] (Body name)
+                    | Function (Maybe Type) String [VarDef name] (Body name)
+                    | Method (Maybe Type) String [VarDef name] (Body name)
                     deriving Show
                              
 instance Pretty name => Pretty (MethodDef name) where                             
   pPrint (Constructor ty name formals body) = 
     block 
-      (text "constructor" <+> pPrint ty <+> pPrint name <+> parens (vcat $ punctuate comma $ map pPrint formals)) 
+      (text "constructor" <+> pPrint ty <+> text name <+> parens (vcat $ punctuate comma $ map pPrint formals)) 
       (pPrint body)
   pPrint (Function mty name formals body) = 
     block
-      (text "function" <+> (text "void" `maybe` pPrint) mty <+> pPrint name <+> parens (vcat $ punctuate comma $ map pPrint formals))
+      (text "function" <+> (text "void" `maybe` pPrint) mty <+> text name <+> parens (vcat $ punctuate comma $ map pPrint formals))
       (pPrint body)
   pPrint (Method mty name formals body) = 
     block
-      (text "method" <+> (text "void" `maybe` pPrint) mty <+> pPrint name <+> parens (vcat $ punctuate comma $ map pPrint formals))
+      (text "method" <+> (text "void" `maybe` pPrint) mty <+> text name <+> parens (vcat $ punctuate comma $ map pPrint formals))
       (pPrint body)
                              
-data VarDef name = VarDef (Type name) name                             
+data VarDecl name = VarDecl Type [name]      
+                  deriving Show
+                           
+instance Pretty name => Pretty (VarDecl name) where                          
+  pPrint (VarDecl ty names) = pPrint ty <+> (vcat $ punctuate comma $ map pPrint names)
+      
+data VarDef name = VarDef Type name                             
                  deriving Show
                           
 instance Pretty name => Pretty (VarDef name) where                          
   pPrint (VarDef ty name) = pPrint ty <+> pPrint name
 
-data Body name = Body [VarDef name] [Stmt name]
+data Body name = Body [VarDecl name] [Stmt name]
                deriving Show
                         
 instance Pretty name => Pretty (Body name) where                        
@@ -100,7 +108,7 @@ data Expr name = IntLit Word16
                | Expr name :=: Expr name
                | Neg (Expr name)
                | Not (Expr name)
-               deriving Show
+               deriving (Show, Functor, Foldable, Traversable)
 
 instance Pretty name => Pretty (Expr name) where
   pPrint (IntLit n) = text $ show n
@@ -125,28 +133,28 @@ instance Pretty name => Pretty (Expr name) where
   
 data LValue name = Var name  
                  | VarIndex name (Expr name)
-                 deriving Show
+                 deriving (Show, Functor, Foldable, Traversable)
                           
-data Call name = FunCall name [Expr name]
-               | MemberCall name name [Expr name]
-               deriving Show
+data Call name = FunCall String [Expr name]
+               | MemberCall String String [Expr name]
+               deriving (Show, Functor, Foldable, Traversable)
                         
 instance Pretty name => Pretty (Call name) where                        
-  pPrint (FunCall f es) = pPrint f <+> parens (hcat $ punctuate comma $ map pPrint es)
-  pPrint (MemberCall o f es) = pPrint o <> char '.' <> pPrint f <+> parens (hcat $ punctuate comma $ map pPrint es)
+  pPrint (FunCall f es) = text f <+> parens (hcat $ punctuate comma $ map pPrint es)
+  pPrint (MemberCall o f es) = text o <> char '.' <> text f <+> parens (hcat $ punctuate comma $ map pPrint es)
                      
 instance Pretty name => Pretty (LValue name) where                     
   pPrint (Var v) = pPrint v
   pPrint (VarIndex v e) = pPrint v $$ brackets (pPrint e)
 
-data Type name = TyInt 
-               | TyChar 
-               | TyBool 
-               | TyClass name                 
-               deriving Show
+data Type = TyInt 
+          | TyChar 
+          | TyBool 
+          | TyClass String
+          deriving Show
 
-instance Pretty name => Pretty (Type name) where            
+instance Pretty Type where            
   pPrint TyInt = text "int"
   pPrint TyChar = text "char"
   pPrint TyBool = text "boolean"
-  pPrint (TyClass c) = pPrint c
+  pPrint (TyClass cls) = text cls

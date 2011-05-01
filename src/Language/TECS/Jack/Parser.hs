@@ -1,7 +1,7 @@
 module Language.TECS.Jack.Parser where
 -- module Language.TECS.Jack.Parser (jack, eof) where
 
-import Data.ByteString.Lazy (ByteString)
+import Data.ByteString.Lazy (ByteString, unpack)
 import Language.TECS.Located
 import Language.TECS.Jack.Parser.Tokens (Token)
 import qualified Language.TECS.Jack.Parser.Tokens as T
@@ -44,11 +44,14 @@ comment = ((:[]) <$> commentContent) <|> multilineComment <?> "comment"
 lexeme :: JackParser a -> JackParser a
 lexeme p = p <* skipMany comment
 
-identifier :: JackParser Name
+identifier :: JackParser String
 identifier = lexeme $ tok $ \ token ->
   case token of
-    T.Identifier x -> Just $ MkName x
+    T.Identifier x -> Just x
     _ -> Nothing  
+    
+name :: JackParser Name    
+name = MkName <$> identifier
 
 braces :: JackParser a -> JackParser a
 braces = between (keyword T.BraceOpen) (keyword T.BraceClose)
@@ -72,7 +75,7 @@ klass = do
   return $ Class cls fields methods
   
 fieldDef :: JackParser (FieldDef Name)  
-fieldDef = field <*> ty <*> identifier `sepBy` comma <* semi
+fieldDef = field <*> ty <*> name `sepBy` comma <* semi
   where field = (keyword T.Field >> return Field)
                 <|> (keyword T.Static >> return Static)
 
@@ -84,13 +87,13 @@ methodDef = method <*> identifier <*> parens formals <*> braces body
         formals = varDef `sepBy` comma
 
 varDef :: JackParser (VarDef Name)
-varDef = VarDef <$> ty <*> identifier
+varDef = VarDef <$> ty <*> name
 
 body :: JackParser (Body Name)
 body = Body <$> many varDecl <*> many stmt
 
-varDecl :: JackParser (VarDef Name)
-varDecl = keyword T.Var *> varDef <* semi
+varDecl :: JackParser (VarDecl Name)
+varDecl = keyword T.Var *> (VarDecl <$> ty <*> name `sepBy1` comma) <* semi
 
 stmt :: JackParser (Stmt Name)
 stmt = (keyword T.Let *> (Let <$> lval <*> (keyword T.Eq *> expr)) <* semi)
@@ -101,8 +104,8 @@ stmt = (keyword T.Let *> (Let <$> lval <*> (keyword T.Eq *> expr)) <* semi)
        <?> "statement"
 
 lval :: JackParser (LValue Name)
-lval = (Var <$> identifier) 
-       <|> (VarIndex <$> identifier <*> brackets expr)
+lval = (Var <$> name) 
+       <|> (VarIndex <$> name <*> brackets expr)
        <?> "lvalue"
        
 expr :: JackParser (Expr Name)
@@ -144,14 +147,14 @@ call = fun <*> parens (expr `sepBy` comma)
   where fun = try (MemberCall <$> identifier <*> (dot *> identifier)) 
               <|> (FunCall <$> identifier)
 
-ty :: JackParser (Type Name)
+ty :: JackParser Type
 ty = (keyword T.Int >> return TyInt)
      <|> (keyword T.Boolean >> return TyBool)
      <|> (keyword T.Char >> return TyChar)
      <|> (TyClass <$> identifier)
      <?> "type specifier"
   
-returnTy :: JackParser (Maybe (Type Name))     
+returnTy :: JackParser (Maybe Type)
 returnTy = (keyword T.Void >> return Nothing) <|> (Just <$> ty) <?> "return type specifier"
      
 jack :: JackParser (Class Name)
