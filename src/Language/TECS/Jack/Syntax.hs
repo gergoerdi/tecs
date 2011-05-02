@@ -1,6 +1,6 @@
 {-# LANGUAGE DeriveFunctor, DeriveTraversable, DeriveFoldable #-}
 module Language.TECS.Jack.Syntax (
-  Name(..), 
+  Name(..), Label,
   Class(..), FieldDef(..), MethodDef(..), 
   Body(..), VarDecl(..), VarDef(..), Stmt(..),
   Expr(..), LValue(..), Type(..), Call(..)
@@ -19,11 +19,13 @@ newtype Name = MkName { getName :: String }
              deriving (Eq, Ord, Show)
 
 instance Pretty Name where
-  pPrint= text . getName
+  pPrint = text . getName
+
+type Label = String
 
 block header body = header $+$ lbrace $+$ nest 4 body $+$ rbrace
 
-data Class name = Class String [FieldDef name] [MethodDef name]
+data Class name = Class Label [FieldDef name] [MethodDef name]
                 deriving Show
                          
 instance Pretty name => Pretty (Class name) where                         
@@ -38,9 +40,9 @@ instance Pretty name => Pretty (FieldDef name) where
   pPrint (Field ty vs) = text "field" <+> pPrint ty <+> cat (punctuate comma $ map pPrint vs) <> semi
   pPrint (Static ty vs) = text "static" <+> pPrint ty <+> cat (punctuate comma $ map pPrint vs) <> semi
 
-data MethodDef name = Constructor Type String [VarDef name] (Body name)
-                    | Function (Maybe Type) String [VarDef name] (Body name)
-                    | Method (Maybe Type) String [VarDef name] (Body name)
+data MethodDef name = Constructor Type Label [VarDef name] (Body name)
+                    | Function (Maybe Type) Label [VarDef name] (Body name)
+                    | Method (Maybe Type) Label [VarDef name] (Body name)
                     deriving Show
                              
 instance Pretty name => Pretty (MethodDef name) where                             
@@ -135,8 +137,8 @@ data LValue name = Var name
                  | VarIndex name (Expr name)
                  deriving (Show, Functor, Foldable, Traversable)
                           
-data Call name = FunCall String [Expr name]
-               | MemberCall String String [Expr name]
+data Call name = FunCall Label [Expr name]
+               | MemberCall Label Label [Expr name]
                deriving (Show, Functor, Foldable, Traversable)
                         
 instance Pretty name => Pretty (Call name) where                        
@@ -150,7 +152,7 @@ instance Pretty name => Pretty (LValue name) where
 data Type = TyInt 
           | TyChar 
           | TyBool 
-          | TyClass String
+          | TyClass Label
           deriving Show
 
 instance Pretty Type where            

@@ -1,4 +1,4 @@
-module Language.TECS.Jack.Layout where
+module Language.TECS.Jack.ToDeck.Layout (layout, Id(..)) where
 
 import Language.TECS.Jack.Syntax
 import Control.Monad.Reader

@@ -4,6 +4,7 @@ import Text.Parsec (runParser)
 import Control.Applicative
 import Language.TECS.Jack.Syntax
 import Language.TECS.Jack.ToDeck.Layout
+import Language.TECS.Jack.ToDeck.Compile
 import Language.TECS.Jack.Parser
 import Language.TECS.Jack.Parser.Lexer
 import System.Environment (getArgs)
@@ -16,7 +17,7 @@ main = do
   s <- BS.readFile filename
   case lexAndParse s of
     Left err -> putStrLn err 
-    Right jack -> print $ pPrint $ layout jack  
+    Right jack -> print $ pPrint $ compile $ layout jack  
 
 parse = runParser (jack <* eof) () filename
   where filename = ""
