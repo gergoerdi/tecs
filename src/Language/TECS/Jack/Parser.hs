@@ -104,8 +104,8 @@ stmt = (keyword T.Let *> (Let <$> lval <*> (keyword T.Eq *> expr)) <* semi)
        <?> "statement"
 
 lval :: JackParser (LValue Name)
-lval = (Var <$> name) 
-       <|> (VarIndex <$> name <*> brackets expr)
+lval = try (VarIndex <$> name <*> brackets expr)
+       <|> (Var <$> name)       
        <?> "lvalue"
        
 expr :: JackParser (Expr Name)
