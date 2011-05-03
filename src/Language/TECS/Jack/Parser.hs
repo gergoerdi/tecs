@@ -171,14 +171,14 @@ call = callType <*> identifier <*> parens (expr `sepBy` comma)
       do
         qualifier <- optionMaybe (try $ identifier <* dot)
         case qualifier of
-          Nothing -> return $ StaticCall Nothing
+          Nothing -> return $ MemberCall Nothing
           Just qualifier -> 
             do
               vars <- getState
               let var = MkName qualifier
               return $ if Set.member var vars 
-                         then MemberCall var
-                         else StaticCall (Just qualifier)
+                         then MemberCall (Just var)
+                         else StaticCall qualifier
 
 ty :: JackParser Type
 ty = (keyword T.Int >> return TyInt)

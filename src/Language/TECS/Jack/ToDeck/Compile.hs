@@ -15,19 +15,33 @@ import qualified Data.ByteString.Lazy as BS
 import Data.Maybe (fromMaybe)
 
 compile :: Jack.Class Id -> Deck.Deck 
-compile (Class cls _ methods) = Deck.Deck [] funs
+compile (Class cls fields methods) = Deck.Deck [] funs
   where 
+    size = sum $ map sizeOf fields    
     funs = map compileMethod methods
+    sizeOf (Static _ _) = 0
+    sizeOf (Field _ vs) = length vs
     
-    compileMethod (Constructor _ name _ body) = compileMember name body
-    compileMethod (Function _ name _ body) = compileMember name body
-    compileMethod (Method _ name _ body) = compileMember name body
+    compileMethod (Constructor _ name _ body) = compileMember alloc name body
+    compileMethod (Function _ name _ body) = compileMember (return ()) name body
+    compileMethod (Method _ name _ body) = compileMember popThis name body
     
-    compileMember name body = Deck.FunctionDef (cls ++ "." ++ name) (fromIntegral localCount) (toList code)
+    alloc = 
+      do
+        emitStmt $ Deck.Push $ Deck.Constant (fromIntegral size)
+        emitStmt $ Deck.Call "Memory.alloc" 1
+        emitStmt $ Deck.Pop $ Deck.RefThis
+    
+    popThis =
+      do
+        emitStmt $ Deck.Push $ Deck.Arg 0
+        emitStmt $ Deck.Pop $ Deck.RefThis
+    
+    compileMember intro name body = Deck.FunctionDef (cls ++ "." ++ name) (fromIntegral localCount) (toList code)
       where 
-        (code, localCount) = (id *** getSum) $ snd $ evalRWS (compileBody body) (JackPos cls name) [0..]
+        (code, localCount) = (id *** getSum) $ snd $ evalRWS (intro >> compileBody body) (JackPos cls name) [0..]
           
-data JackPos = JackPos { jackClass, jackMethod :: Label }
+data JackPos = JackPos { jack_class, jack_method :: Label }
 type Compiler a = RWS JackPos (Seq Deck.Directive, Sum Int) [Int] a
 
 emitStmt :: Deck.Stmt -> Compiler ()
@@ -48,6 +62,13 @@ freshLoopLabels =
     (i:is) <- get
     put is
     return ("WHILE_EXP" ++ show i, "WHILE_END" ++ show i)
+    
+freshIfLabels :: Compiler (Label, Label)
+freshIfLabels = 
+  do
+    (i:is) <- get
+    put is
+    return ("IF_TRUE" ++ show i, "IF_END" ++ show i)
     
 compileBody :: Jack.Body Id -> Compiler ()
 compileBody (Body locals ss) = 
@@ -87,12 +108,20 @@ compileStmt (While cond body) =
     compileBody body
     emitStmt $ Deck.Goto start
     emitLabel end    
+compileStmt (If cond thn els) =    
+  do
+    (trueBranch, end) <- freshIfLabels
+    compileExpr cond
+    emitStmt $ Deck.IfGoto trueBranch
+    (return () `maybe` compileBody) els
+    emitStmt $ Deck.Goto end
+    emitLabel trueBranch
+    compileBody thn
+    emitLabel end      
 compileStmt (Return mx) =  
   do
     compileExpr (IntLit 0 `fromMaybe` mx)
     emitStmt Deck.Return    
--- compileStmt _ = return ()
-compileStmt s = error (show s)
 
 compileExpr :: Jack.Expr Id -> Compiler ()
 compileExpr (IntLit n) = 
@@ -116,41 +145,57 @@ compileExpr (Ref (VarIndex v idx)) =
     compileIndex v idx
     emitStmt $ Deck.Pop Deck.RefThat
     emitStmt $ Deck.Push $ Deck.That 0
-compileExpr (x :+: y) = 
+compileExpr (x :+: y) = binary Deck.Add x y
+compileExpr (x :-: y) = binary Deck.Sub x y
+compileExpr (x :/: y) = compileExpr (Sub $ StaticCall "Math" "divide" [x, y])
+compileExpr (x :*: y) = compileExpr (Sub $ StaticCall "Math" "multiply" [x, y])
+compileExpr (x :=: y) = binary Deck.Eq x y 
+compileExpr (x :<: y) = binary Deck.Lt x y
+compileExpr (x :>: y) = binary Deck.Gt x y
+compileExpr (x :&: y) = binary Deck.And x y
+compileExpr (x :|: y) = binary Deck.Or x y
+compileExpr (Not x) = 
   do
     compileExpr x
-    compileExpr y
-    emitStmt Deck.Add
-compileExpr (x :-: y) = 
+    emitStmt $ Deck.Not
+compileExpr (Neg x) = 
   do
     compileExpr x
-    compileExpr y
-    emitStmt Deck.Sub  
-compileExpr (x :/: y) = 
-  compileExpr (Sub $ MemberCall "Math" "divide" [x, y])
-compileExpr (x :<: y) = 
-  do
-    compileExpr x
-    compileExpr y
-    emitStmt Deck.Lt
+    emitStmt $ Deck.Neg
 compileExpr (Sub call) = 
   compileCall call  
--- compileExpr e = return ()
-compileExpr e = error (show e)
+compileExpr Null = 
+  compileExpr $ IntLit 0  
+compileExpr This =  
+  emitStmt $ Deck.Push $ Deck.RefThis
 
-compileCall call = 
+compileCall (StaticCall cls name actuals) = 
   do
     mapM_ compileExpr actuals
-    emitStmt $ Deck.Call fun (fromIntegral $ length actuals)
-  where 
-    (fun, actuals) = case call of
-      MemberCall cls member actuals -> (cls ++ "." ++ member, actuals)
-      FunCall fun actuals -> (fun, actuals)
+    emitStmt $ Deck.Call (cls ++ "." ++ name) (fromIntegral $ length actuals)
+compileCall (MemberCall inst name actuals) = 
+  do    
+    emitStmt $ Deck.Push $ (Deck.RefThis `maybe` addressOf) inst    
+    mapM_ compileExpr actuals
+    cls <- case fmap id_type inst of
+          Nothing -> asks jack_class
+          Just (TyClass cls) -> return cls
+    -- add 1 to number of arguments to account for 'this'
+    emitStmt $ Deck.Call (cls ++ "." ++ name) (succ $ fromIntegral $ length actuals) 
 
-addressOf (IdArg n) = Deck.Arg (fromIntegral n)
-addressOf (IdLocal n) = Deck.Local (fromIntegral n)
-addressOf (IdStatic n) = Deck.Static (fromIntegral n)
-addressOf (IdThis n) = Deck.This (fromIntegral n)
+addressOf :: Id -> Deck.Addr
+addressOf var = 
+  case id_alloc var of  
+    AllocArg n -> Deck.Arg (fromIntegral n)
+    AllocLocal n -> Deck.Local (fromIntegral n)
+    AllocStatic n -> Deck.Static (fromIntegral n)
+    AllocField n -> Deck.This (fromIntegral n)
+
+binary op x y =
+  do
+    compileExpr x
+    compileExpr y
+    emitStmt op
 
 compileIndex v idx = 
   do    

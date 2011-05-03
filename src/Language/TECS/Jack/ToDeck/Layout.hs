@@ -1,4 +1,4 @@
-module Language.TECS.Jack.ToDeck.Layout (layout, Id(..)) where
+module Language.TECS.Jack.ToDeck.Layout (layout, Id(..), Alloc(..)) where
 
 import Language.TECS.Jack.Syntax
 import Control.Monad.Reader
@@ -11,6 +11,7 @@ import qualified Data.Traversable as Trav
 import Data.Maybe
 import Text.PrettyPrint.HughesPJClass
 import Text.PrettyPrint.HughesPJ
+import Data.Function (on)
 
 data SymbolTable k v = SymbolTable (Map k v) (Maybe (SymbolTable k v))
                      deriving Show
@@ -21,18 +22,30 @@ descend elems = SymbolTable (Map.fromList elems) . Just
 
 lookupSym key (SymbolTable local parent) = msum [Map.lookup key local, lookupSym key =<< parent]
 
-data Id = IdArg Int
-        | IdLocal Int
-        | IdStatic Int
-        | IdThis Int
-        deriving (Eq, Ord, Show)
+data Alloc = AllocArg Int
+           | AllocLocal Int
+           | AllocStatic Int
+           | AllocField Int
+           deriving (Eq, Ord, Show)
+
+data Id = Id { id_alloc :: Alloc, id_type :: Type }
+        deriving Show
+                 
+instance Eq Id where                 
+  (==) = (==) `on` id_alloc
+  
+instance Ord Id where  
+  compare = compare `on` id_alloc
+
+instance Pretty Alloc where
+  pPrint v = braces $ case v of    
+    AllocArg n -> text "arg" <+> text (show n)
+    AllocLocal n -> text "local" <+> text (show n)
+    AllocStatic n -> text "static" <+> text (show n)
+    AllocField n -> text "this" <+> text (show n)
 
 instance Pretty Id where
-  pPrint v = braces $ case v of    
-    IdArg n -> text "arg" <+> text (show n)
-    IdLocal n -> text "local" <+> text (show n)
-    IdStatic n -> text "static" <+> text (show n)
-    IdThis n -> text "this" <+> text (show n)
+  pPrint (Id alloc ty) = parens (pPrint ty) <> pPrint alloc
 
 layout :: Class Name -> Class Id
 layout (Class name fields methods) = Class name fields' $ runReader (mapM layoutMethod methods) $ mkSymbolTable (concat mappings)
@@ -44,13 +57,13 @@ collectField (Field ty vs) = do
   mapping <- forM vs $ \v -> do    
     i <- gets fst
     modify (first succ)
-    return (v, IdThis i)
+    return (v, Id (AllocField i) ty)
   return (Field ty $ map snd mapping, mapping)
 collectField (Static ty vs) = do
   mapping <- forM vs $ \v -> do    
     i <- gets snd
     modify (second succ)
-    return (v, IdStatic i)
+    return (v, Id (AllocStatic i) ty)
   return (Static ty $ map snd mapping, mapping)
 
 layoutMethod :: MethodDef Name -> Reader (SymbolTable Name Id) (MethodDef Id)
@@ -60,7 +73,10 @@ layoutMethod (Method ty name formals body) = layoutParams (Method ty name) forma
 
 layoutParams f formals body = f formals' <$> local (descend mapping) doBody
   where 
-    (formals', mapping) = unzip $ zipWith `flip` [0..] `flip` formals $ \ i (VarDef ty v) -> (VarDef ty $ IdArg i, (v, IdArg i))
+    (formals', mapping) = unzip $ zipWith arg [0..] formals
+    arg i (VarDef ty v) = (VarDef ty id, (v, id))
+      where 
+        id = Id (AllocArg i) ty         
     doBody = do
       r <- ask
       return $ runReader (layoutBody body) (r, 0)
@@ -70,7 +86,7 @@ collectLocal (VarDecl ty vs) = do
   mapping <- forM vs $ \v -> do
     i <- get
     modify succ
-    return (v, IdLocal i)
+    return (v, Id (AllocLocal i) ty)
   return (VarDecl ty $ map snd mapping, mapping)
 
 layoutBody :: Body Name -> Reader (SymbolTable Name Id, Int) (Body Id)
