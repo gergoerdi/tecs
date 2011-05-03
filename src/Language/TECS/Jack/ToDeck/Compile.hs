@@ -12,6 +12,7 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Control.Arrow (first, second, (***))
 import qualified Data.ByteString.Lazy as BS
+import Data.Maybe (fromMaybe)
 
 compile :: Jack.Class Id -> Deck.Deck 
 compile (Class cls _ methods) = Deck.Deck [] funs
@@ -22,12 +23,12 @@ compile (Class cls _ methods) = Deck.Deck [] funs
     compileMethod (Function _ name _ body) = compileMember name body
     compileMethod (Method _ name _ body) = compileMember name body
     
-    compileMember name body = Deck.FunctionDef name (fromIntegral localCount) (toList code)
+    compileMember name body = Deck.FunctionDef (cls ++ "." ++ name) (fromIntegral localCount) (toList code)
       where 
-        (code, localCount) = (id *** getSum) $ snd $ evalRWS (compileBody body) (JackPos cls name) ()
+        (code, localCount) = (id *** getSum) $ snd $ evalRWS (compileBody body) (JackPos cls name) [0..]
           
 data JackPos = JackPos { jackClass, jackMethod :: Label }
-type Compiler a = RWS JackPos (Seq Deck.Directive, Sum Int) () a
+type Compiler a = RWS JackPos (Seq Deck.Directive, Sum Int) [Int] a
 
 emitStmt :: Deck.Stmt -> Compiler ()
 emitStmt = emitDir . Deck.Stmt 
@@ -38,6 +39,16 @@ emitDir d = tell $ (singleton d, mempty)
 emitLocalCount :: Int -> Compiler ()
 emitLocalCount c = tell $ (mempty, Sum c)
 
+emitLabel :: Label -> Compiler ()
+emitLabel = emitDir . Deck.Label
+
+freshLoopLabels :: Compiler (Label, Label)
+freshLoopLabels = 
+  do
+    (i:is) <- get
+    put is
+    return ("WHILE_EXP" ++ show i, "WHILE_END" ++ show i)
+    
 compileBody :: Jack.Body Id -> Compiler ()
 compileBody (Body locals ss) = 
   do
@@ -52,11 +63,35 @@ compileStmt (Let (Var v) e) =
   do
     compileExpr e
     emitStmt $ Deck.Pop $ addressOf v
+compileStmt (Let (VarIndex v idx) e) =    
+  do
+    compileIndex v idx
+    compileExpr e
+    -- Pop the second item from the stack into refThat
+    emitStmt $ Deck.Pop $ Deck.Temp 0
+    emitStmt $ Deck.Pop Deck.RefThat
+    emitStmt $ Deck.Push $ Deck.Temp 0    
+    -- Pop the top of the stack (the value of e) into that[0]
+    emitStmt $ Deck.Pop $ Deck.That 0    
 compileStmt (Do call) =     
   do  
     compileCall call
     emitStmt $ Deck.Pop $ Deck.Temp 0
-compileStmt _ = return ()
+compileStmt (While cond body) =    
+  do
+    (start, end) <- freshLoopLabels
+    emitLabel start
+    compileExpr cond
+    emitStmt $ Deck.Not
+    emitStmt $ Deck.IfGoto end
+    compileBody body
+    emitStmt $ Deck.Goto start
+    emitLabel end    
+compileStmt (Return mx) =  
+  do
+    compileExpr (IntLit 0 `fromMaybe` mx)
+    emitStmt Deck.Return    
+-- compileStmt _ = return ()
 compileStmt s = error (show s)
 
 compileExpr :: Jack.Expr Id -> Compiler ()
@@ -75,8 +110,12 @@ compileExpr (StringLit s) =
       emitStmt $ Deck.Push $ Deck.Constant (fromIntegral c)
       emitStmt $ Deck.Call "String.appendChar" 2  
 compileExpr (Ref (Var v)) = 
+  emitStmt $ Deck.Push $ addressOf v
+compileExpr (Ref (VarIndex v idx)) = 
   do
-    emitStmt $ Deck.Push $ addressOf v
+    compileIndex v idx
+    emitStmt $ Deck.Pop Deck.RefThat
+    emitStmt $ Deck.Push $ Deck.That 0
 compileExpr (x :+: y) = 
   do
     compileExpr x
@@ -87,9 +126,17 @@ compileExpr (x :-: y) =
     compileExpr x
     compileExpr y
     emitStmt Deck.Sub  
+compileExpr (x :/: y) = 
+  compileExpr (Sub $ MemberCall "Math" "divide" [x, y])
+compileExpr (x :<: y) = 
+  do
+    compileExpr x
+    compileExpr y
+    emitStmt Deck.Lt
 compileExpr (Sub call) = 
-  compileCall call
-compileExpr e = return () -- error (show e)
+  compileCall call  
+-- compileExpr e = return ()
+compileExpr e = error (show e)
 
 compileCall call = 
   do
@@ -104,3 +151,9 @@ addressOf (IdArg n) = Deck.Arg (fromIntegral n)
 addressOf (IdLocal n) = Deck.Local (fromIntegral n)
 addressOf (IdStatic n) = Deck.Static (fromIntegral n)
 addressOf (IdThis n) = Deck.This (fromIntegral n)
+
+compileIndex v idx = 
+  do    
+    compileExpr idx
+    emitStmt $ Deck.Push $ addressOf v
+    emitStmt $ Deck.Add
