@@ -1,21 +1,26 @@
-module Language.TECS.Jack.Parser where
+module Language.TECS.Jack.Parser (parseJack) where
 -- module Language.TECS.Jack.Parser (jack, eof) where
 
 import Data.ByteString.Lazy (ByteString, unpack)
 import Language.TECS.Located
 import Language.TECS.Jack.Parser.Tokens (Token)
+import Language.TECS.Jack.Parser.Lexer (lexer)
 import qualified Language.TECS.Jack.Parser.Tokens as T
 import Language.TECS.Jack.Syntax
-import Text.Parsec.Pos
+import qualified Data.ByteString.Lazy as BS
 
 import Text.Parsec hiding (label, anyToken, eof)
 import Text.Parsec.Expr
+import Text.Parsec.Pos
 import Control.Applicative ((*>), (<*>), (<*), (<$>), (<$))
 import Control.Monad
+import Control.Monad.Reader
+import Data.Set (Set)
+import qualified Data.Set as Set
 
-type JackParser a = Parsec [L Token] () a
+type JackParser a = Parsec [L Token] (Set Name) a
 
-tok :: Show t => (t -> Maybe a) -> Parsec [L t] () a
+tok :: (Show t) => (t -> Maybe a) -> Parsec [L t] u a
 tok f = token (show . unLoc) getLoc (f . unLoc)
 
 anyToken :: JackParser Token
@@ -25,15 +30,17 @@ eof :: JackParser ()
 eof = notFollowedBy anyToken <?> "end of input"
 
 keyword :: Token -> JackParser ()
-keyword kw = lexeme $ tok $ \ token -> do
-  guard $ token == kw
-  return ()
+keyword kw = lexeme $ tok $ \ token -> 
+  do
+    guard $ token == kw
+    return ()
 
 commentContent :: JackParser ByteString
-commentContent = tok $ \ token -> do
-  case token of 
-    T.Comment s -> Just s
-    _ -> Nothing
+commentContent = tok $ \ token -> 
+  do
+    case token of 
+      T.Comment s -> Just s
+      _ -> Nothing
 
 multilineComment :: JackParser [ByteString]
 multilineComment = keyword T.CommentStart *> many commentContent <* keyword T.CommentEnd
@@ -62,38 +69,53 @@ parens = between (keyword T.ParenOpen) (keyword T.ParenClose)
 brackets :: JackParser a -> JackParser a
 brackets = between (keyword T.BracketOpen) (keyword T.BracketClose)
 
-
 comma = keyword T.Comma
 semi = keyword T.Semicolon
 dot = keyword T.Dot
 
 klass :: JackParser (Class Name)
-klass = do
-  keyword T.Class
-  cls <- identifier
-  (fields, methods) <- braces $ (,) <$> many fieldDef <*> many methodDef
-  return $ Class cls fields methods
+klass = 
+  do
+    keyword T.Class
+    cls <- identifier
+    (fields, methods) <- braces $ scope $ (,) <$> many fieldDef <*> many methodDef
+    return $ Class cls fields methods
   
 fieldDef :: JackParser (FieldDef Name)  
-fieldDef = field <*> ty <*> name `sepBy` comma <* semi
+fieldDef = field <*> ty <*> varNames <* semi
   where field = (keyword T.Field >> return Field)
                 <|> (keyword T.Static >> return Static)
 
 methodDef :: JackParser (MethodDef Name)
-methodDef = method <*> identifier <*> parens formals <*> braces body
-  where method = (keyword T.Constructor >> Constructor <$> ty)
-                 <|> (keyword T.Function >> Function <$> returnTy)
-                 <|> (keyword T.Method >> Method <$> returnTy)        
-        formals = varDef `sepBy` comma
+methodDef = scope $ method <*> identifier <*> parens formals <*> braces body
+  where 
+    method = (keyword T.Constructor >> Constructor <$> ty)
+             <|> (keyword T.Function >> Function <$> returnTy)
+             <|> (keyword T.Method >> Method <$> returnTy)        
+    formals = varDef `sepBy` comma
 
 varDef :: JackParser (VarDef Name)
-varDef = VarDef <$> ty <*> name
-
+varDef = VarDef <$> ty <*> varName
+        
 body :: JackParser (Body Name)
-body = Body <$> many varDecl <*> many stmt
+body = scope $ Body <$> many varDecl <*> many stmt
 
 varDecl :: JackParser (VarDecl Name)
-varDecl = keyword T.Var *> (VarDecl <$> ty <*> name `sepBy1` comma) <* semi
+varDecl = keyword T.Var *> (VarDecl <$> ty <*> varNames) <* semi
+
+varName = 
+  do
+    var <- name
+    addVar var
+    return var
+
+varNames = varName `sepBy1` comma
+    
+addVar = modifyState . Set.insert
+scope f =
+  do
+    vars <- getState
+    f <* setState vars
 
 stmt :: JackParser (Stmt Name)
 stmt = (keyword T.Let *> (Let <$> lval <*> (keyword T.Eq *> expr)) <* semi)
@@ -143,9 +165,20 @@ expr = buildExpressionParser table term <?> "expression"
           _ -> Nothing
 
 call :: JackParser (Call Name)
-call = fun <*> parens (expr `sepBy` comma)
-  where fun = try (MemberCall <$> identifier <*> (dot *> identifier)) 
-              <|> (FunCall <$> identifier)
+call = callType <*> identifier <*> parens (expr `sepBy` comma)
+  where 
+    callType = 
+      do
+        qualifier <- optionMaybe (try $ identifier <* dot)
+        case qualifier of
+          Nothing -> return $ StaticCall Nothing
+          Just qualifier -> 
+            do
+              vars <- getState
+              let var = MkName qualifier
+              return $ if Set.member var vars 
+                         then MemberCall var
+                         else StaticCall (Just qualifier)
 
 ty :: JackParser Type
 ty = (keyword T.Int >> return TyInt)
@@ -159,3 +192,14 @@ returnTy = (keyword T.Void >> return Nothing) <|> (Just <$> ty) <?> "return type
      
 jack :: JackParser (Class Name)
 jack = skipMany comment >> klass
+
+parseJack :: BS.ByteString -> FilePath -> Either String (Class Name)
+parseJack s filename = 
+  case lexer s of
+    Left err -> Left err
+    Right tokens -> 
+      case parse tokens of 
+        Left err -> Left $ show err
+        Right jack -> Right jack
+    
+  where parse = runParser (jack <* eof) Set.empty filename

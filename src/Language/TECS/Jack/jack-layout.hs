@@ -14,15 +14,6 @@ import Text.PrettyPrint.HughesPJ
 main = do
   [filename] <- getArgs
   s <- BS.readFile filename
-  case lexAndParse s of
+  case parseJack s filename of
     Left err -> putStrLn err 
     Right jack -> print $ pPrint $ layout jack  
-
-parse = runParser (jack <* eof) () filename
-  where filename = ""
-        
-lexAndParse s = case lexer s of
-  Left err -> Left err
-  Right tokens -> case parse tokens of 
-    Left err -> Left $ show err
-    Right jack -> Right jack

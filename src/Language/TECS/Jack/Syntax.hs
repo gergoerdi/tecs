@@ -137,13 +137,16 @@ data LValue name = Var name
                  | VarIndex name (Expr name)
                  deriving (Show, Functor, Foldable, Traversable)
                           
-data Call name = FunCall Label [Expr name]
-               | MemberCall Label Label [Expr name]
+data Call name = StaticCall (Maybe Label) Label [Expr name]
+               | MemberCall name Label [Expr name]
                deriving (Show, Functor, Foldable, Traversable)
                         
 instance Pretty name => Pretty (Call name) where                        
-  pPrint (FunCall f es) = text f <+> parens (hcat $ punctuate comma $ map pPrint es)
-  pPrint (MemberCall o f es) = text o <> char '.' <> text f <+> parens (hcat $ punctuate comma $ map pPrint es)
+  pPrint (StaticCall cls f es) = qualifier <> text f <+> parens (hcat $ punctuate comma $ map pPrint es)
+    where qualifier = case cls of
+            Nothing -> empty
+            Just cls -> text cls <> char '.'
+  pPrint (MemberCall v f es) = pPrint v <> char '.' <> text f <+> parens (hcat $ punctuate comma $ map pPrint es)
                      
 instance Pretty name => Pretty (LValue name) where                     
   pPrint (Var v) = pPrint v
