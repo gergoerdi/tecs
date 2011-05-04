@@ -7,10 +7,8 @@ module Language.TECS.Jack.Syntax (
   ) where
 
 import Text.PrettyPrint.HughesPJClass
-import Text.PrettyPrint.HughesPJ
 import Data.Word
 import Data.ByteString.Lazy (ByteString)
-import qualified Data.ByteString.Lazy as BS
 import qualified Data.ByteString.Lazy.Char8 as BSC
 import Data.Foldable
 import Data.Traversable

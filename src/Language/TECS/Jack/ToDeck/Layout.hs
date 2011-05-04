@@ -10,7 +10,6 @@ import Control.Arrow (first, second, (***))
 import qualified Data.Traversable as Trav
 import Data.Maybe
 import Text.PrettyPrint.HughesPJClass
-import Text.PrettyPrint.HughesPJ
 import Data.Function (on)
 
 data SymbolTable k v = SymbolTable (Map k v) (Maybe (SymbolTable k v))

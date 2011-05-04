@@ -1,7 +1,6 @@
 module Language.TECS.Jack.Parser (parseJack) where
--- module Language.TECS.Jack.Parser (jack, eof) where
 
-import Data.ByteString.Lazy (ByteString, unpack)
+import Data.ByteString.Lazy (ByteString)
 import Language.TECS.Located
 import Language.TECS.Jack.Parser.Tokens (Token)
 import Language.TECS.Jack.Parser.Lexer (lexer)
@@ -11,10 +10,8 @@ import qualified Data.ByteString.Lazy as BS
 
 import Text.Parsec hiding (label, anyToken, eof)
 import Text.Parsec.Expr
-import Text.Parsec.Pos
-import Control.Applicative ((*>), (<*>), (<*), (<$>), (<$))
+import Control.Applicative ((*>), (<*>), (<*), (<$>))
 import Control.Monad
-import Control.Monad.Reader
 import Data.Set (Set)
 import qualified Data.Set as Set
 

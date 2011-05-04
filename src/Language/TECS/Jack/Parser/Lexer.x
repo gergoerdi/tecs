@@ -9,13 +9,7 @@ import Text.Parsec.Pos
 import qualified Data.ByteString.Lazy as BS
 import qualified Data.ByteString.Lazy.Char8 as BSC
 
-import Control.Arrow (first)
 import Data.Function (fix)
-import Data.Map (Map)
-import qualified Data.Map as Map
-import Data.CaseInsensitive (CI)
-import qualified Data.CaseInsensitive as CI
-import Data.Maybe (fromMaybe)
 }
 
 %wrapper "monad-bytestring"

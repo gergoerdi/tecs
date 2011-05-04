@@ -1,14 +1,15 @@
-module Language.TECS.Deck.Parser (deck, eof) where
+module Language.TECS.Deck.Parser (parseDeck) where
 
 import Data.ByteString.Lazy (ByteString)
 import Language.TECS.Located
 import Language.TECS.Deck.Parser.Tokens (Token)
+import Language.TECS.Deck.Parser.Lexer (lexer)
 import qualified Language.TECS.Deck.Parser.Tokens as T
 import Language.TECS.Deck.Syntax
-import Text.Parsec.Pos
+import qualified Data.ByteString.Lazy as BS
 
 import Text.Parsec hiding (label, anyToken, eof)
-import Control.Applicative ((*>), (<*>), (<*), (<$>), (<$))
+import Control.Applicative ((*>), (<*>), (<*), (<$>))
 import Control.Monad
 
 type DeckParser a = Parsec [L Token] () a
@@ -107,3 +108,14 @@ offset = value <?> "offset"
 
 deck :: DeckParser Deck
 deck = skipMany comment >> Deck <$> many directive <*> many functionDef
+
+parseDeck :: BS.ByteString -> FilePath -> Either String Deck
+parseDeck s filename = 
+  case lexer s of
+    Left err -> Left err
+    Right tokens -> 
+      case parse tokens of 
+        Left err -> Left $ show err
+        Right deck -> Right deck
+    
+  where parse = runParser (deck <* eof) () filename

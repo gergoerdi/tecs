@@ -1,0 +1,64 @@
+Name:                tecs
+Version:             0.1.0
+Synopsis:            Utilities for The Elements of Computing Systems
+Description:         Various utilities for the languages introduces in
+                     the book The Elements of Computing Systems: Jack,
+                     a high-level, object-oriented language; Deck, a
+                     stack-based VM language; and Hack, the assembly
+                     language of a very simple 16-bit general-purpose
+                     computer.
+
+License:             BSD3
+License-file:        LICENSE
+
+Author:              Gergo Erdi <http://gergo.erdi.hu/>
+
+Maintainer:          gergo@erdi.hu
+
+Category:            Language
+Build-type:          Simple
+-- Extra-source-files:  README.md
+
+-- Constraint on the version of Cabal needed to build this package.
+Cabal-version:       >=1.6
+
+Extra-Source-Files:  src/Language/TECS/Jack/Parser/Lexer.x
+                     src/Language/TECS/Deck/Parser/Lexer.x
+
+source-repository head
+  Type:     git
+  Location: git://github.com/gergoerdi/tecs.git
+
+Executable jackc
+  Build-Tools:       alex >= 2.3
+  hs-source-dirs:    src
+  Main-is:           Language/TECS/Jack/jackc.hs
+  Other-modules:     Language.TECS.Jack.Syntax
+                     Language.TECS.Jack.Parser Language.TECS.Jack.Parser.Tokens Language.TECS.Jack.Parser.Lexer
+                     Language.TECS.Jack.ToDeck.Compile Language.TECS.Jack.ToDeck.Layout
+
+  ghc-options:       -Wall -fwarn-tabs
+                     -fno-warn-incomplete-patterns -fno-warn-unused-binds -fno-warn-unused-matches
+                     -fno-warn-missing-signatures -fno-warn-name-shadowing -fno-warn-orphans
+
+  Build-depends:     base >= 4.0, array, bytestring, containers, mtl,
+                     pretty, prettyclass,
+                     parsec == 3.*, case-insensitive,
+                     filepath
+
+Library
+  Build-Tools:       alex >= 2.3
+  hs-source-dirs:    src
+  Exposed-modules:   Language.TECS.Jack.Syntax Language.TECS.Jack.Parser
+                     Language.TECS.Jack.ToDeck.Compile Language.TECS.Jack.ToDeck.Layout
+
+                     Language.TECS.Deck.Syntax Language.TECS.Deck.Parser
+
+  Other-modules:     Language.TECS.Jack.Parser.Tokens Language.TECS.Jack.Parser.Lexer
+                     Language.TECS.Deck.Parser.Tokens Language.TECS.Deck.Parser.Lexer
+  ghc-options:       -Wall -fwarn-tabs -fno-warn-name-shadowing -fno-warn-missing-signatures -fno-warn-incomplete-patterns -fno-warn-unused-binds
+                     -fno-warn-orphans
+
+  Build-depends:     base >= 4.0, array, bytestring, containers, mtl,
+                     pretty, prettyclass,
+                     parsec == 3.*, case-insensitive

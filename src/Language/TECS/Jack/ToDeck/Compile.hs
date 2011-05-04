@@ -1,4 +1,4 @@
-module Language.TECS.Jack.ToDeck.Compile where
+module Language.TECS.Jack.ToDeck.Compile (compile) where
 
 import Language.TECS.Jack.Syntax as Jack
 import qualified Language.TECS.Deck.Syntax as Deck
@@ -8,9 +8,7 @@ import Control.Monad.RWS
 import Control.Applicative
 import Data.Sequence (Seq, singleton)
 import Data.Foldable (toList)
-import Data.Map (Map)
-import qualified Data.Map as Map
-import Control.Arrow (first, second, (***))
+import Control.Arrow ((***))
 import qualified Data.ByteString.Lazy as BS
 import Data.Maybe (fromMaybe)
 
