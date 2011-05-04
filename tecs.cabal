@@ -36,6 +36,7 @@ Executable jackc
   Other-modules:     Language.TECS.Jack.Syntax
                      Language.TECS.Jack.Parser Language.TECS.Jack.Parser.Tokens Language.TECS.Jack.Parser.Lexer
                      Language.TECS.Jack.ToDeck.Compile Language.TECS.Jack.ToDeck.Layout
+                     Language.TECS.Located                     
 
   ghc-options:       -Wall -fwarn-tabs
                      -fno-warn-incomplete-patterns -fno-warn-unused-binds -fno-warn-unused-matches
@@ -51,8 +52,8 @@ Library
   hs-source-dirs:    src
   Exposed-modules:   Language.TECS.Jack.Syntax Language.TECS.Jack.Parser
                      Language.TECS.Jack.ToDeck.Compile Language.TECS.Jack.ToDeck.Layout
-
                      Language.TECS.Deck.Syntax Language.TECS.Deck.Parser
+                     Language.TECS.Located                     
 
   Other-modules:     Language.TECS.Jack.Parser.Tokens Language.TECS.Jack.Parser.Lexer
                      Language.TECS.Deck.Parser.Tokens Language.TECS.Deck.Parser.Lexer
